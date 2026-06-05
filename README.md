@@ -140,6 +140,15 @@ Part of the **SuperInstance** ternary computing crate family:
 - `ternary-geometry` — Geometric algorithms in ternary space
 - `ternary-causality` — Causal inference for ternary systems
 
+## See Also
+
+- **ternary-voting** — Voting mechanisms for ternary collective decisions
+- **ternary-quorum** — Quorum-based agreement protocols
+- **ternary-trust** — Trust and reputation scoring for ternary agents
+- **ternary-distributed** — Distributed systems primitives for ternary fleets
+- **ternary-petri** — Petri net modeling with ternary tokens
+- **ternary-room** — Room-based environments for agent coordination
+
 ## License
 
 MIT
