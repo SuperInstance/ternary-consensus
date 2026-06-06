@@ -2,9 +2,5 @@
 name = "ternary-consensus"
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
-description = "Consensus algorithms for distributed ternary agents: Raft-style, Byzantine fault tolerance, voting"
-keywords = ["consensus", "ternary", "byzantine", "distributed", "raft"]
-categories = ["algorithms", "data-structures"]
-
-[dependencies]
+description = "Distributed ternary agent consensus with Byzantine tolerance, CRDT sync, and leader election."
+repository = "https://github.com/SuperInstance/ternary-consensus"
