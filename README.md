@@ -1,95 +1,80 @@
-# ternary-consensus
+# Ternary Consensus — Byzantine-Tolerant Distributed Voting with CRDT State Sync
 
-**# ternary-consensus  Consensus algorithms for distributed ternary agents**
+**Ternary Consensus** implements distributed agreement among ternary agents using three-valued votes: {-1=reject, 0=neutral, +1=accept}. It provides Byzantine fault tolerance, CRDT-based state synchronization across nodes, and leader election — all built on the ternary alphabet where every decision reduces to one of three states.
 
-[![ternary](https://img.shields.io/badge/ecosystem-ternary-blue)](https://github.com/orgs/SuperInstance/repositories?q=ternary)
-[![tests](https://img.shields.io/badge/tests-23-green)]()
+## Why It Matters
 
-## Overview
+Byzantine agreement is the cornerstone of reliable distributed systems. Classical protocols like PBFT use binary accept/reject, forcing neutral agents to commit to one side. Ternary voting adds the crucial **neutral** option: agents can abstain without blocking consensus, more accurately modeling real-world preferences. This is particularly valuable in fleet GPU management, where nodes may be uncertain about workload suitability but shouldn't veto proposals outright. The CRDT state layer ensures that consensus decisions propagate reliably even under network partitions, since CRDT merges are commutative, associative, and idempotent by construction.
 
-# ternary-consensus
+## How It Works
 
-Consensus algorithms for distributed ternary agents.
+### Voting Protocol
 
-Provides:
-- `TernaryValue` — core ternary type (-1, 0, +1)
-- `RaftNode` — Raft-style leader election and log replication for ternary decisions
-- `ByzantineConsensus` — Byzantine fault-tolerant consensus for ternary votes
-- `VotingRound` — Simple majority and supermajority voting
-- `ConsensusLog` — Replicated log of ternary decisions
+Each agent votes on a `Proposal` (which carries a ternary `merit` value in {-1, 0, +1}). Honest agents vote according to the proposal's merit; Byzantine agents vote opposite to disrupt. The `VoteResult` tallies accept/reject/neutral counts and determines a `ConsensusOutcome` (Accepted, Rejected, NoConsensus) over potentially multiple rounds.
 
-## Architecture
+### Byzantine Tolerance
 
-- **`Node`** — core data structure
-- **`LogEntry`** — core data structure
-- **`RaftConsensus`** — core data structure
-- **`ByzantineConsensus`** — core data structure
-- **`VotingRound`** — core data structure
-- **`ConsensusLog`** — core data structure
-- **`TernaryValue`** — state enumeration
+Following the Lamport-Lamport-Shostak bound, the system tolerates f Byzantine agents with n ≥ 3f + 1 total agents. Byzantine agents are modeled with reduced `trust_score` (0.5 vs 1.0 for honest). The consensus threshold typically requires >⅔ non-reject votes for acceptance.
 
-### Key Functions
+### CRDT State Replication
 
-- `to_i8()`
-- `from_i8()`
-- `combine()`
-- `new()`
-- `with_value()`
-- `byzantine()`
-- `new()`
-- `node_count()`
-- `elect_leader()`
-- `propose()`
-- ... and 32 more
+`CrdtState` maintains a per-node HashMap of proposal outcomes with a monotonically increasing version counter. When nodes sync, they merge by taking the latest version for each proposal — this is a Last-Writer-Wins (LWW) map, a well-known state-based CRDT. Merge complexity is O(k) for k decisions.
 
-## Why Ternary?
+### Leader Election
 
-The balanced ternary system {-1, 0, +1} (also known as Z₃) is the mathematically optimal discrete encoding:
-- **More expressive than binary**: three states capture positive, neutral, and negative
-- **Natural for decisions**: accept/reject/abstain, buy/hold/sell, agree/disagree/neutral
-- **Self-balancing**: the 0 state acts as a universal screen, preventing pathological lock-in
-- **Z₃ cyclic dynamics**: rock-paper-scissors is the only natural coordination mechanism
+Leaders are selected based on accumulated trust scores. An agent's trust score increases with successful consensus participation and decreases when detected as Byzantine. This provides Sybil resistance proportional to the trust bootstrap.
 
-## Stats
-
-| Metric | Value |
-|--------|-------|
-| Lines of Rust | 735 |
-| Test count | 23 |
-| Public types | 7 |
-| Public functions | 42 |
-
-## Ecosystem
-
-This crate is part of the **[SuperInstance Ternary Fleet](https://github.com/orgs/SuperInstance/repositories?q=ternary)**:
-
-- **[ternary-core](https://github.com/SuperInstance/ternary-core)** — shared traits and Z₃ arithmetic
-- **[ternary-grid](https://github.com/SuperInstance/ternary-grid)** — spatial grid with {-1, 0, +1} cells
-- **[ternary-graph](https://github.com/SuperInstance/ternary-graph)** — ternary-weighted graph algorithms
-- **[ternary-automata](https://github.com/SuperInstance/ternary-automata)** — three-state cellular automata
-- **[ternary-compiler](https://github.com/SuperInstance/ternary-compiler)** — expression compiler and optimizer
-
-200+ crates. 4,300+ tests. One pattern.
-
-## Research Context
-
-The ternary approach connects to several active research areas:
-- **Ternary Neural Networks** (TNNs): weights constrained to {-1, 0, +1} for efficient inference
-- **Huawei's ternary chip**: 7nm ternary silicon with 60% less power consumption
-- **Active inference**: free energy minimization naturally maps to ternary action selection
-- **Cyclic dominance**: RPS dynamics maintain biodiversity in spatial ecology
-- **Z₃ group theory**: the only algebraic group on three elements is cyclic addition mod 3
-
-## Usage
-
-```toml
-[dependencies]
-ternary-consensus = "0.1.0"
-```
+## Quick Start
 
 ```rust
-use ternary_consensus;
+use ternary_consensus::{Agent, Proposal, Vote, CrdtState};
+
+let mut agents = vec![
+    Agent::new(1),
+    Agent::new(2),
+    Agent::new(3),
+    Agent::byzantine(4), // Byzantine agent
+];
+
+let proposal = Proposal {
+    id: 1,
+    description: "Deploy model v2".into(),
+    merit: 1, // +1 = positive merit
+};
+
+// Each agent votes
+for agent in &mut agents {
+    agent.vote(&proposal);
+}
+
+// Tally votes
+let accepts = agents.iter().filter(|a| a.vote == Vote::Accept).count();
+let rejects = agents.iter().filter(|a| a.vote == Vote::Reject).count();
 ```
+
+```bash
+cargo add ternary-consensus
+```
+
+## API
+
+| Type / Function | Description |
+|---|---|
+| `Vote` | `Reject(-1)`, `Neutral(0)`, `Accept(1)` |
+| `Agent` | `{ id, vote, is_byzantine, trust_score }` with `vote(&Proposal)` |
+| `Proposal` | `{ id, description, merit: i8 }` |
+| `VoteResult` | Tallies + `ConsensusOutcome` |
+| `CrdtState` | LWW-map CRDT for decision propagation |
+
+## Architecture Notes
+
+This is the governance layer of **SuperInstance**. Fleet-wide decisions — model deployment, weight updates, resource allocation — flow through ternary consensus. The three-valued vote maps to the γ (growth = accept), η (entropy = reject), and neutral states of γ + η = C. The CRDT layer ensures decisions survive network partitions. See [Architecture](https://github.com/SuperInstance/SuperInstance/blob/main/ARCHITECTURE.md).
+
+## References
+
+- Lamport, Leslie; Shostak, Robert; Pease, Marshall. "The Byzantine Generals Problem," *ACM TOPLAS*, 4(3), 1982.
+- Shapiro, Marc et al. "A Comprehensive Study of Convergent and Commutative Replicated Data Types," *INRIA RR-7506*, 2011 — CRDT foundations.
+- Castro, Miguel & Liskov, Barbara. "Practical Byzantine Fault Tolerance," *OSDI*, 1999 — PBFT protocol.
 
 ## License
 
