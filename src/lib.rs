@@ -3,6 +3,47 @@
 //! Distributed ternary agent consensus on GPU.
 //! Agents vote {-1=reject, 0=neutral, +1=accept} with Byzantine tolerance,
 //! CRDT state sync, and leader election.
+//!
+//! # Example
+//!
+//! ```
+//! use ternary_consensus::{Agent, ConsensusOutcome, CrdtState, Proposal, Vote};
+//!
+//! let mut agents = vec![
+//!     Agent::new(1),
+//!     Agent::new(2),
+//!     Agent::new(3),
+//!     Agent::byzantine(4), // Byzantine agent
+//! ];
+//!
+//! let proposal = Proposal {
+//!     id: 1,
+//!     description: "Deploy model v2".into(),
+//!     merit: 1, // +1 = positive merit
+//! };
+//!
+//! // Each agent votes on the proposal.
+//! for agent in &mut agents {
+//!     agent.vote(&proposal);
+//! }
+//!
+//! // Tally votes.
+//! let accepts = agents.iter().filter(|a| a.vote == Vote::Accept).count();
+//! let rejects = agents.iter().filter(|a| a.vote == Vote::Reject).count();
+//! assert_eq!(accepts, 3); // 3 honest agents accept
+//! assert_eq!(rejects, 1); // byzantine agent rejects
+//!
+//! // Record the decision in a node's CRDT state.
+//! let mut state = CrdtState::new(0);
+//! state.record(proposal.id, ConsensusOutcome::Accepted);
+//! assert!(state.decisions.contains_key(&1));
+//! ```
+//!
+//! # Status
+//!
+//! The threshold, leader-election, and CRDT-merge behaviors documented in the
+//! README reflect what the code actually does today; trust-weighted election,
+//! strict BFT quorums, and Last-Writer-Wins merging are planned (see README).
 
 use std::collections::HashMap;
 
