@@ -7,12 +7,22 @@
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Vote { Reject = -1, Neutral = 0, Accept = 1 }
+pub enum Vote {
+    Reject = -1,
+    Neutral = 0,
+    Accept = 1,
+}
 
 impl Vote {
-    pub fn value(&self) -> i8 { *self as i8 }
+    pub fn value(&self) -> i8 {
+        *self as i8
+    }
     pub fn from_i8(v: i8) -> Self {
-        match v { -1 => Vote::Reject, 1 => Vote::Accept, _ => Vote::Neutral }
+        match v {
+            -1 => Vote::Reject,
+            1 => Vote::Accept,
+            _ => Vote::Neutral,
+        }
     }
 }
 
@@ -26,21 +36,39 @@ pub struct Agent {
 
 impl Agent {
     pub fn new(id: u32) -> Self {
-        Self { id, vote: Vote::Neutral, is_byzantine: false, trust_score: 1.0 }
+        Self {
+            id,
+            vote: Vote::Neutral,
+            is_byzantine: false,
+            trust_score: 1.0,
+        }
     }
 
     pub fn byzantine(id: u32) -> Self {
-        Self { id, vote: Vote::Neutral, is_byzantine: true, trust_score: 0.5 }
+        Self {
+            id,
+            vote: Vote::Neutral,
+            is_byzantine: true,
+            trust_score: 0.5,
+        }
     }
 
     pub fn vote(&mut self, proposal: &Proposal) {
         if self.is_byzantine {
             // Byzantine: vote opposite of honest agents
-            self.vote = if proposal.merit > 0 { Vote::Reject } else { Vote::Accept };
+            self.vote = if proposal.merit > 0 {
+                Vote::Reject
+            } else {
+                Vote::Accept
+            };
         } else {
-            self.vote = if proposal.merit > 0 { Vote::Accept }
-                else if proposal.merit < 0 { Vote::Reject }
-                else { Vote::Neutral };
+            self.vote = if proposal.merit > 0 {
+                Vote::Accept
+            } else if proposal.merit < 0 {
+                Vote::Reject
+            } else {
+                Vote::Neutral
+            };
         }
     }
 }
@@ -63,7 +91,11 @@ pub struct VoteResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ConsensusOutcome { Accepted, Rejected, NoConsensus }
+pub enum ConsensusOutcome {
+    Accepted,
+    Rejected,
+    NoConsensus,
+}
 
 #[derive(Debug, Clone)]
 pub struct CrdtState {
@@ -74,7 +106,11 @@ pub struct CrdtState {
 
 impl CrdtState {
     pub fn new(node_id: u32) -> Self {
-        Self { node_id, decisions: HashMap::new(), version: 0 }
+        Self {
+            node_id,
+            decisions: HashMap::new(),
+            version: 0,
+        }
     }
 
     pub fn record(&mut self, proposal_id: u64, outcome: ConsensusOutcome) {
@@ -112,7 +148,12 @@ impl ConsensusCluster {
             crdt_states.push(CrdtState::new(id));
             id += 1;
         }
-        Self { agents, crdt_states, proposals_processed: 0, total_rounds: 0 }
+        Self {
+            agents,
+            crdt_states,
+            proposals_processed: 0,
+            total_rounds: 0,
+        }
     }
 
     /// Run consensus on a proposal. Returns the vote result.
@@ -125,9 +166,21 @@ impl ConsensusCluster {
                 agent.vote(proposal);
             }
 
-            let accept = self.agents.iter().filter(|a| a.vote == Vote::Accept).count();
-            let reject = self.agents.iter().filter(|a| a.vote == Vote::Reject).count();
-            let neutral = self.agents.iter().filter(|a| a.vote == Vote::Neutral).count();
+            let accept = self
+                .agents
+                .iter()
+                .filter(|a| a.vote == Vote::Accept)
+                .count();
+            let reject = self
+                .agents
+                .iter()
+                .filter(|a| a.vote == Vote::Reject)
+                .count();
+            let neutral = self
+                .agents
+                .iter()
+                .filter(|a| a.vote == Vote::Neutral)
+                .count();
 
             let honest_count = self.agents.iter().filter(|a| !a.is_byzantine).count();
             let threshold = honest_count / 2 + 1;
@@ -153,8 +206,11 @@ impl ConsensusCluster {
 
             return VoteResult {
                 proposal_id: proposal.id,
-                accept_count: accept, reject_count: reject,
-                neutral_count: neutral, outcome, rounds,
+                accept_count: accept,
+                reject_count: reject,
+                neutral_count: neutral,
+                outcome,
+                rounds,
             };
         }
     }
@@ -186,10 +242,18 @@ impl ConsensusCluster {
         }
     }
 
-    pub fn honest_count(&self) -> usize { self.agents.iter().filter(|a| !a.is_byzantine).count() }
-    pub fn byzantine_count(&self) -> usize { self.agents.iter().filter(|a| a.is_byzantine).count() }
+    pub fn honest_count(&self) -> usize {
+        self.agents.iter().filter(|a| !a.is_byzantine).count()
+    }
+    pub fn byzantine_count(&self) -> usize {
+        self.agents.iter().filter(|a| a.is_byzantine).count()
+    }
     pub fn avg_rounds(&self) -> f64 {
-        if self.proposals_processed == 0 { 0.0 } else { self.total_rounds as f64 / self.proposals_processed as f64 }
+        if self.proposals_processed == 0 {
+            0.0
+        } else {
+            self.total_rounds as f64 / self.proposals_processed as f64
+        }
     }
 }
 
@@ -200,7 +264,11 @@ mod tests {
     #[test]
     fn test_honest_consensus() {
         let mut cluster = ConsensusCluster::new(5, 0);
-        let proposal = Proposal { id: 1, description: "test".into(), merit: 1 };
+        let proposal = Proposal {
+            id: 1,
+            description: "test".into(),
+            merit: 1,
+        };
         let result = cluster.consensus(&proposal, 10);
         assert_eq!(result.outcome, ConsensusOutcome::Accepted);
         assert_eq!(result.rounds, 1);
@@ -209,7 +277,11 @@ mod tests {
     #[test]
     fn test_reject_consensus() {
         let mut cluster = ConsensusCluster::new(5, 0);
-        let proposal = Proposal { id: 2, description: "bad".into(), merit: -1 };
+        let proposal = Proposal {
+            id: 2,
+            description: "bad".into(),
+            merit: -1,
+        };
         let result = cluster.consensus(&proposal, 10);
         assert_eq!(result.outcome, ConsensusOutcome::Rejected);
     }
@@ -218,7 +290,11 @@ mod tests {
     fn test_byzantine_tolerance() {
         // 5 honest, 2 byzantine — should still reach consensus
         let mut cluster = ConsensusCluster::new(5, 2);
-        let proposal = Proposal { id: 3, description: "contested".into(), merit: 1 };
+        let proposal = Proposal {
+            id: 3,
+            description: "contested".into(),
+            merit: 1,
+        };
         let result = cluster.consensus(&proposal, 10);
         assert_eq!(result.outcome, ConsensusOutcome::Accepted); // 5 accept, 2 reject
     }
@@ -235,12 +311,19 @@ mod tests {
     #[test]
     fn test_crdt_sync() {
         let mut cluster = ConsensusCluster::new(3, 0);
-        let p1 = Proposal { id: 10, description: "a".into(), merit: 1 };
+        let p1 = Proposal {
+            id: 10,
+            description: "a".into(),
+            merit: 1,
+        };
         cluster.consensus(&p1, 5);
         cluster.crdt_sync();
         // All nodes should have the same decision
-        let decisions: Vec<_> = cluster.crdt_states.iter()
-            .filter_map(|s| s.decisions.get(&10).cloned()).collect();
+        let decisions: Vec<_> = cluster
+            .crdt_states
+            .iter()
+            .filter_map(|s| s.decisions.get(&10).cloned())
+            .collect();
         assert!(decisions.iter().all(|d| *d == ConsensusOutcome::Accepted));
     }
 
@@ -248,7 +331,11 @@ mod tests {
     fn test_multiple_proposals() {
         let mut cluster = ConsensusCluster::new(7, 2);
         for i in 0..10 {
-            let proposal = Proposal { id: i, description: format!("p{}", i), merit: if i % 3 == 0 { -1 } else { 1 } };
+            let proposal = Proposal {
+                id: i,
+                description: format!("p{}", i),
+                merit: if i % 3 == 0 { -1 } else { 1 },
+            };
             cluster.consensus(&proposal, 5);
         }
         assert_eq!(cluster.proposals_processed, 10);
@@ -269,7 +356,11 @@ mod tests {
     fn test_byzantine_cannot_block() {
         // 3 honest, 3 byzantine — honest should still accept with merit=1
         let mut cluster = ConsensusCluster::new(3, 3);
-        let proposal = Proposal { id: 99, description: "contested".into(), merit: 1 };
+        let proposal = Proposal {
+            id: 99,
+            description: "contested".into(),
+            merit: 1,
+        };
         let result = cluster.consensus(&proposal, 5);
         // 3 honest accept, 3 byzantine reject — threshold is 2
         assert_eq!(result.outcome, ConsensusOutcome::Accepted);
