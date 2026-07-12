@@ -406,4 +406,69 @@ mod tests {
         // 3 honest accept, 3 byzantine reject — threshold is 2
         assert_eq!(result.outcome, ConsensusOutcome::Accepted);
     }
+
+    #[test]
+    fn test_no_consensus_on_neutral_proposal() {
+        // merit=0: honest agents vote Neutral, so neither accept nor reject
+        // reaches the honest-majority threshold. After max_rounds the cluster
+        // must fall back to NoConsensus (the previously untested branch).
+        let mut cluster = ConsensusCluster::new(3, 0);
+        let proposal = Proposal {
+            id: 7,
+            description: "abstain".into(),
+            merit: 0,
+        };
+        let result = cluster.consensus(&proposal, 3);
+        assert_eq!(result.outcome, ConsensusOutcome::NoConsensus);
+        assert_eq!(result.neutral_count, 3);
+        assert_eq!(result.accept_count, 0);
+        assert_eq!(result.reject_count, 0);
+        assert_eq!(result.rounds, 3);
+    }
+
+    #[test]
+    fn test_vote_from_i8_out_of_range() {
+        // Values outside {-1, 0, +1} must clamp to Neutral (documented behavior).
+        assert_eq!(Vote::from_i8(2), Vote::Neutral);
+        assert_eq!(Vote::from_i8(-2), Vote::Neutral);
+        assert_eq!(Vote::from_i8(i8::MAX), Vote::Neutral);
+        assert_eq!(Vote::from_i8(i8::MIN), Vote::Neutral);
+    }
+
+    #[test]
+    fn test_crdt_merge_union_and_first_writer_wins() {
+        // Distinct keys are unioned in.
+        let mut a = CrdtState::new(1);
+        a.record(1, ConsensusOutcome::Accepted);
+        let mut b = CrdtState::new(2);
+        b.record(2, ConsensusOutcome::Rejected);
+        a.merge(&b);
+        assert_eq!(a.decisions.len(), 2);
+        assert_eq!(a.decisions.get(&1), Some(&ConsensusOutcome::Accepted));
+        assert_eq!(a.decisions.get(&2), Some(&ConsensusOutcome::Rejected));
+        assert_eq!(a.version, 2); // max(1, 1) + 1
+
+        // On a key collision the existing entry wins (add-only / first-writer-wins,
+        // NOT last-writer-wins — see README status).
+        let mut c = CrdtState::new(3);
+        c.record(5, ConsensusOutcome::Accepted);
+        let mut d = CrdtState::new(4);
+        d.record(5, ConsensusOutcome::Rejected);
+        c.merge(&d);
+        assert_eq!(c.decisions.get(&5), Some(&ConsensusOutcome::Accepted));
+    }
+
+    #[test]
+    fn test_leader_election_empty_cluster() {
+        // No agents => no valid leader.
+        let mut cluster = ConsensusCluster::new(0, 0);
+        assert_eq!(cluster.elect_leader(), None);
+    }
+
+    #[test]
+    fn test_avg_rounds_with_no_proposals() {
+        let cluster = ConsensusCluster::new(3, 1);
+        assert_eq!(cluster.avg_rounds(), 0.0);
+        assert_eq!(cluster.proposals_processed, 0);
+    }
 }
