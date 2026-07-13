@@ -14,20 +14,33 @@ Each agent votes on a `Proposal` (which carries a ternary `merit` value in {-1, 
 
 ### Byzantine Tolerance
 
-Following the Lamport-Lamport-Shostak bound, the system tolerates f Byzantine agents with n ≥ 3f + 1 total agents. Byzantine agents are modeled with reduced `trust_score` (0.5 vs 1.0 for honest). The consensus threshold typically requires >⅔ non-reject votes for acceptance.
+Byzantine agents are modeled with a reduced `trust_score` (0.5 vs 1.0 for honest) and vote opposite to the proposal's merit. In the current implementation, a proposal is accepted when accept votes reach a simple majority of honest agents (`⌊honest / 2⌋ + 1`), and rejected when reject votes reach the same threshold; otherwise the round re-votes up to a caller-provided limit and falls back to `NoConsensus`. The classical Lamport–Shostak–Pease bound (n ≥ 3f + 1 tolerating f Byzantine faults) is the target resilience model; strict BFT quorums (e.g. a >⅔ acceptance threshold) are not yet enforced (see [Status](#status)).
 
 ### CRDT State Replication
 
-`CrdtState` maintains a per-node HashMap of proposal outcomes with a monotonically increasing version counter. When nodes sync, they merge by taking the latest version for each proposal — this is a Last-Writer-Wins (LWW) map, a well-known state-based CRDT. Merge complexity is O(k) for k decisions.
+`CrdtState` stores a per-node `HashMap` of proposal outcomes plus a monotonically increasing version counter. `merge` takes the union of decisions and, on a key collision, keeps the existing entry (first-writer-wins) — i.e. an add-only/state-union CRDT. Full Last-Writer-Wins (LWW) semantics with per-decision versioning is planned but not yet implemented. Merge complexity is O(k) for k decisions.
 
 ### Leader Election
 
-Leaders are selected based on accumulated trust scores. An agent's trust score increases with successful consensus participation and decreases when detected as Byzantine. This provides Sybil resistance proportional to the trust bootstrap.
+`elect_leader` performs plurality voting among honest agents (each honest agent votes for itself); the candidate with the most votes wins, with ties broken by iteration order. `trust_score` is tracked per agent but is not yet consulted by the election — trust-weighted leader election is planned (see [Status](#status)).
+
+## Status
+
+**Implemented**
+- Ternary voting with honest vs byzantine agent behavior (`-1`/`0`/`+1`)
+- Multi-round tally producing `Accepted` / `Rejected` / `NoConsensus`
+- Per-node `CrdtState` with union-merge and a monotonically increasing version counter
+- Plurality leader election among honest agents
+
+**Planned / not yet enforced**
+- Strict BFT quorum (n ≥ 3f + 1) and a >⅔ acceptance threshold — current threshold is a simple majority of honest agents
+- Trust-weighted leader election — `trust_score` is recorded but not yet consulted
+- Last-Writer-Wins per-decision CRDT merge — current `merge` is add-only (first-writer-wins on collision)
 
 ## Quick Start
 
 ```rust
-use ternary_consensus::{Agent, Proposal, Vote, CrdtState};
+use ternary_consensus::{Agent, ConsensusOutcome, CrdtState, Proposal, Vote};
 
 let mut agents = vec![
     Agent::new(1),
@@ -42,14 +55,21 @@ let proposal = Proposal {
     merit: 1, // +1 = positive merit
 };
 
-// Each agent votes
+// Each agent votes on the proposal.
 for agent in &mut agents {
     agent.vote(&proposal);
 }
 
-// Tally votes
+// Tally votes.
 let accepts = agents.iter().filter(|a| a.vote == Vote::Accept).count();
 let rejects = agents.iter().filter(|a| a.vote == Vote::Reject).count();
+assert_eq!(accepts, 3); // 3 honest agents accept
+assert_eq!(rejects, 1); // byzantine agent rejects
+
+// Record the decision in a node's CRDT state.
+let mut state = CrdtState::new(0);
+state.record(proposal.id, ConsensusOutcome::Accepted);
+assert!(state.decisions.contains_key(&1));
 ```
 
 ```bash
